@@ -1,0 +1,7 @@
+{
+  "name": "Relatório Mina Serra Sul",
+  "description": "Gerador de relatórios de execução offline para automação da mina.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
