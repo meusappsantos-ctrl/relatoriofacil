@@ -5,6 +5,7 @@ import CreateTemplate from './components/CreateTemplate';
 import ReportForm from './components/ReportForm';
 import Login from './components/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -48,13 +49,15 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-            <AppRoutes />
-        </div>
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-100 dark:bg-slate-900 font-sans text-gray-900 dark:text-slate-100 transition-colors duration-300">
+              <AppRoutes />
+          </div>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

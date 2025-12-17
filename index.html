@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
@@ -15,17 +15,37 @@
 
     <title>Relatório Mina Serra Sul</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              slate: {
+                750: '#2d3748', // Custom shade
+              }
+            }
+          }
+        }
+      }
+    </script>
     <style>
       /* Custom scrollbar for better mobile feel */
       ::-webkit-scrollbar {
         width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #f1f1f1;
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
+        background: #94a3b8; /* slate-400 */
         border-radius: 3px;
+      }
+      .dark ::-webkit-scrollbar-track {
+        background: #0f172a;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
       }
       body {
         -webkit-tap-highlight-color: transparent;
@@ -45,8 +65,10 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 text-slate-900 select-none">
+  <body class="bg-gray-100 text-gray-900 dark:bg-slate-900 dark:text-slate-100 select-none transition-colors duration-300">
     <div id="root"></div>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>

@@ -1,25 +1,31 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import { ReportData, ReportTemplate, ReportPhoto } from '../types';
+
+// Helper to strip emojis and icons from text for professional PDF output
+const cleanText = (str: string | undefined): string => {
+  if (!str) return '';
+  // Regex to remove emojis and symbols, keeping standard text and punctuation
+  return str.replace(/[\u{1F600}-\u{1F6FF}\u{1F300}-\u{1F5FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+            .trim();
+};
 
 export const generatePDF = async (template: ReportTemplate, data: ReportData) => {
   const doc = new jsPDF();
   
-  // Palette definition
+  // Professional / Clean Palette
   const colors = {
-    primary: [15, 23, 42],      // Slate 900
+    primary: [30, 41, 59],      // Slate 800
     text: [51, 65, 85],         // Slate 700
     label: [100, 116, 139],     // Slate 500
     accent: [37, 99, 235],      // Blue 600
-    light: [241, 245, 249],     // Slate 100
+    lightGray: [241, 245, 249], // Slate 100
     white: [255, 255, 255],
-    success: [22, 163, 74],     // Green 600
-    danger: [220, 38, 38],      // Red 600
-    warning: [217, 119, 6],     // Amber 600
+    border: [226, 232, 240]     // Slate 200
   };
 
   let yPos = 0;
   const pageWidth = doc.internal.pageSize.width;
-  const margin = 14;
+  const margin = 15; // Slightly larger margin for better readability
   const contentWidth = pageWidth - (margin * 2);
 
   // Helper: Set Color
@@ -28,214 +34,203 @@ export const generatePDF = async (template: ReportTemplate, data: ReportData) =>
   const setDraw = (c: number[]) => doc.setDrawColor(c[0], c[1], c[2]);
 
   // --- HEADER ---
-  setFill(colors.primary);
-  doc.rect(0, 0, pageWidth, 40, 'F');
+  setFill(colors.accent);
+  doc.rect(0, 0, pageWidth, 35, 'F');
   
-  doc.setFontSize(22);
+  doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   setText(colors.white);
-  doc.text("RELATÓRIO DE EXECUÇÃO", margin, 20);
+  doc.text("RELATÓRIO DE EXECUÇÃO", margin, 18);
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  setText(colors.label); // Lighten for subtitle
-  doc.setTextColor(203, 213, 225); // Slate 300 manually
-  doc.text("AUTOMAÇÃO – MINA SERRA SUL", margin, 28);
+  doc.setTextColor(226, 232, 240);
+  doc.text("AUTOMAÇÃO – MINA SERRA SUL", margin, 26);
   
-  // Date in Header
-  doc.setFontSize(10);
-  doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth - margin, 20, { align: 'right' });
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth - margin, 18, { align: 'right' });
 
-  yPos = 50;
+  yPos = 45;
 
-  // --- SECTIONS HELPER ---
+  // --- LAYOUT HELPERS ---
+  
+  // Draw Section Header
   const drawSectionTitle = (title: string, y: number) => {
-    setFill(colors.light);
-    doc.roundedRect(margin, y, contentWidth, 8, 1, 1, 'F');
+    // Gray background bar
+    setFill(colors.lightGray);
+    doc.rect(margin, y, contentWidth, 7, 'F');
+    
+    // Text
     setText(colors.primary);
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text(title.toUpperCase(), margin + 3, y + 5.5);
-    return y + 14;
+    doc.text(cleanText(title).toUpperCase(), margin + 2, y + 4.5);
+    return y + 12;
   };
 
-  const drawField = (label: string, value: string, x: number, y: number, w: number) => {
+  // Draw Field with Dynamic Height Calculation
+  const drawField = (label: string, value: string, x: number, y: number, w: number): number => {
+    const safeValue = cleanText(value) || "-";
+    
     // Label
     setText(colors.label);
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
-    doc.text(label, x, y);
+    doc.text(cleanText(label).toUpperCase(), x, y);
     
-    // Value
+    // Value wrapping
     setText(colors.text);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     
-    const splitVal = doc.splitTextToSize(value || "-", w);
+    const splitVal = doc.splitTextToSize(safeValue, w);
     doc.text(splitVal, x, y + 5);
     
-    return (splitVal.length * 5); // Return height usage
+    // Return height used by this field
+    return (splitVal.length * 4.5) + 4; 
   };
 
   // --- 1. DADOS DA ORDEM ---
   yPos = drawSectionTitle("DADOS DA ORDEM", yPos);
   
-  drawField("Nº OM", data.omNumber, margin, yPos, 40);
-  drawField("DESCRIÇÃO DA OM", template.omDescription, margin + 50, yPos, 120);
+  // Row 1: OM Number (Small) | Description (Large)
+  const omNumW = 40;
+  const omDescW = contentWidth - omNumW - 5;
   
-  yPos += 12; // Spacing
+  const hOM = drawField("Nº OM", data.omNumber, margin, yPos, omNumW);
+  const hDesc = drawField("DESCRIÇÃO DA OM", template.omDescription, margin + omNumW + 5, yPos, omDescW);
+  
+  yPos += Math.max(hOM, hDesc) + 6;
 
   // --- 2. DETALHES DA EXECUÇÃO ---
   yPos = drawSectionTitle("DETALHES DA EXECUÇÃO", yPos);
 
-  // Grid Layout for Execution details
+  // 3 Column Grid
+  const colGap = 5;
+  const colW = (contentWidth - (colGap * 2)) / 3;
   const col1 = margin;
-  const col2 = margin + 60;
-  const col3 = margin + 120;
-  
-  drawField("DATA", data.date.split('-').reverse().join('/'), col1, yPos, 50);
-  drawField("EQUIPAMENTO", data.equipment, col2, yPos, 50);
-  drawField("TIPO DE ATIVIDADE", data.activityType, col3, yPos, 50);
-  
-  yPos += 12;
+  const col2 = margin + colW + colGap;
+  const col3 = margin + (colW * 2) + (colGap * 2);
 
-  drawField("HORÁRIO INICIAL", data.startTime, col1, yPos, 50);
-  drawField("HORÁRIO FINAL", data.endTime, col2, yPos, 50);
+  // Row 1
+  let h1 = drawField("DATA", data.date.split('-').reverse().join('/'), col1, yPos, colW);
+  let h2 = drawField("EQUIPAMENTO", data.equipment, col2, yPos, colW);
+  let h3 = drawField("TIPO DE ATIVIDADE", data.activityType, col3, yPos, colW);
   
-  yPos += 14;
+  yPos += Math.max(h1, h2, h3) + 6;
+
+  // Row 2
+  h1 = drawField("HORÁRIO INICIAL", data.startTime, col1, yPos, colW);
+  h2 = drawField("HORÁRIO FINAL", data.endTime, col2, yPos, colW);
+  // Empty 3rd column
+  
+  yPos += Math.max(h1, h2) + 8;
 
   // --- 3. ATIVIDADE EXECUTADA ---
   yPos = drawSectionTitle("ATIVIDADE EXECUTADA", yPos);
   
-  const activityText = data.activityExecuted || template.activityExecuted;
+  const activityText = cleanText(data.activityExecuted || template.activityExecuted);
   setText(colors.text);
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
+  
   const splitActivity = doc.splitTextToSize(activityText, contentWidth);
   doc.text(splitActivity, margin, yPos);
   
   yPos += (splitActivity.length * 5) + 8;
 
-  // --- 3.1 OBSERVAÇÕES ---
-  if (data.observations) {
+  // --- 3.1 OBSERVAÇÕES (Se houver) ---
+  if (data.observations && cleanText(data.observations).length > 0) {
     yPos = drawSectionTitle("OBSERVAÇÕES", yPos);
     
-    setText(colors.text);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    const splitObs = doc.splitTextToSize(data.observations, contentWidth);
+    const obsText = cleanText(data.observations);
+    const splitObs = doc.splitTextToSize(obsText, contentWidth);
     doc.text(splitObs, margin, yPos);
     
     yPos += (splitObs.length * 5) + 8;
   }
 
-  // --- 4. STATUS E SEGURANÇA ---
-  yPos = drawSectionTitle("STATUS E SEGURANÇA", yPos);
+  // --- 4. STATUS ---
+  // Ensure we have space, else add page
+  if (yPos > 240) {
+      doc.addPage();
+      yPos = 20;
+  }
 
-  const drawBadge = (label: string, value: string, color: number[], x: number, y: number) => {
-    setFill(color);
-    doc.roundedRect(x, y, 55, 14, 2, 2, 'F');
-    
-    // Inner Text
-    setText(colors.white);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    doc.text(label, x + 3, y + 5);
-    
-    doc.setFontSize(10);
-    doc.text(value.toUpperCase(), x + 3, y + 10);
+  yPos = drawSectionTitle("STATUS E PENDÊNCIAS", yPos);
+
+  // Status Row - Using Simple Text/Box layout instead of colored badges for cleaner look
+  setDraw(colors.border);
+  setFill(colors.white);
+  
+  const statusBoxW = contentWidth / 3;
+  
+  const drawStatusItem = (label: string, value: string, x: number, y: number) => {
+      setText(colors.label);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.text(cleanText(label), x, y);
+      
+      setText(colors.primary);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold"); // Bold for status value
+      doc.text(cleanText(value).toUpperCase(), x, y + 5);
   };
 
-  // Status Badges
-  // Finished
-  drawBadge(
-    "OM FINALIZADA?", 
-    data.isFinished ? "SIM" : "NÃO", 
-    data.isFinished ? colors.success : colors.warning, 
-    margin, 
-    yPos
-  );
-
-  // Pending
-  drawBadge(
-    "PENDÊNCIAS?", 
-    data.hasPending ? "SIM" : "NÃO", 
-    data.hasPending ? colors.warning : colors.accent, 
-    margin + 60, 
-    yPos
-  );
-
-  // IAMO
-  drawBadge(
-    "DESVIO IAMO?", 
-    data.iamoDeviation ? "SIM" : "NÃO", 
-    data.iamoDeviation ? colors.danger : colors.success, 
-    margin + 120, 
-    yPos
-  );
-
-  yPos += 20;
-
-  // IAMO Details if exists
-  if (data.iamoDeviation) {
-     setText(colors.danger);
-     doc.setFontSize(9);
-     doc.setFont("helvetica", "bold");
-     doc.text(`DETALHES DO DESVIO:`, margin, yPos);
-     
-     setText(colors.text);
-     doc.setFont("helvetica", "normal");
-     const iamoDetails = `Período: ${data.iamoPeriod || '-'} | Motivo: ${data.iamoReason || '-'}`;
-     const splitIamo = doc.splitTextToSize(iamoDetails, contentWidth);
-     doc.text(splitIamo, margin, yPos + 5);
-     yPos += (splitIamo.length * 5) + 8;
-  }
+  drawStatusItem("OM FINALIZADA?", data.isFinished ? "SIM" : "NÃO", col1, yPos);
+  drawStatusItem("PENDÊNCIAS?", data.hasPending ? "SIM" : "NÃO", col2, yPos);
+  drawStatusItem("DESVIO IAMO?", data.iamoDeviation ? "SIM" : "NÃO", col3, yPos);
   
-  // Pending Details if exists
+  yPos += 12;
+
+  // Conditional Status Details
+  if (data.iamoDeviation) {
+     const label = "DETALHES DO DESVIO IAMO:";
+     const val = `Período: ${data.iamoPeriod || '-'} | Motivo: ${data.iamoReason || '-'}`;
+     yPos += drawField(label, val, margin, yPos, contentWidth) + 4;
+  }
+
   if (data.hasPending && data.pendingDescription) {
-     setText(colors.warning);
-     doc.setFontSize(9);
-     doc.setFont("helvetica", "bold");
-     doc.text(`DETALHES DA PENDÊNCIA:`, margin, yPos);
-     
-     setText(colors.text);
-     doc.setFont("helvetica", "normal");
-     const splitPending = doc.splitTextToSize(data.pendingDescription, contentWidth);
-     doc.text(splitPending, margin, yPos + 5);
-     yPos += (splitPending.length * 5) + 8;
+     const label = "DESCRIÇÃO DA PENDÊNCIA:";
+     const val = data.pendingDescription;
+     yPos += drawField(label, val, margin, yPos, contentWidth) + 4;
   }
 
   // --- 5. EQUIPE ---
+  yPos += 4; // Extra spacing
+  if (yPos > 250) {
+    doc.addPage();
+    yPos = 20;
+  }
+  
   yPos = drawSectionTitle("EQUIPE TÉCNICA", yPos);
   
-  drawField("TURNO", data.team, col1, yPos, 50);
-  drawField("CENTRO DE TRABALHO", data.workCenter, col2, yPos, 80);
+  h1 = drawField("TURNO", data.team, col1, yPos, colW);
+  h2 = drawField("CENTRO DE TRABALHO", data.workCenter, col2, yPos, colW * 2 + colGap); // Span 2 cols
   
-  yPos += 12;
-  drawField("TÉCNICOS", data.technicians, col1, yPos, contentWidth);
+  yPos += Math.max(h1, h2) + 6;
   
-  const techLines = doc.splitTextToSize(data.technicians || "", contentWidth);
-  yPos += (techLines.length * 5) + 10;
+  drawField("TÉCNICOS", data.technicians, margin, yPos, contentWidth);
 
   // --- 6. REGISTROS FOTOGRÁFICOS ---
   if (data.photos && data.photos.length > 0) {
     doc.addPage();
     
-    // Header for Photos
-    setFill(colors.primary);
+    // Header
+    setFill(colors.accent);
     doc.rect(0, 0, pageWidth, 25, 'F');
     setText(colors.white);
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("REGISTROS FOTOGRÁFICOS", margin, 16);
+    doc.text("REGISTROS FOTOGRÁFICOS", margin, 17);
 
     let imgY = 40;
     const imgSize = 80;
-    const gap = 20; // Increased gap to allow space for captions
+    const gap = 20;
     const maxPageY = 270; 
     
     data.photos.forEach((photoEntry, index) => {
-       // Normalize data structure in case old data exists
        const photo: ReportPhoto = typeof photoEntry === 'string' 
           ? { uri: photoEntry, caption: '' } 
           : photoEntry;
@@ -243,51 +238,40 @@ export const generatePDF = async (template: ReportTemplate, data: ReportData) =>
        const isRightColumn = index % 2 !== 0;
        const x = isRightColumn ? margin + imgSize + gap : margin;
        
-       // Calculate needed height for this item (Image + Caption)
-       // We approximate caption height
        let captionLines: string[] = [];
        if (photo.caption) {
-           doc.setFontSize(8);
-           captionLines = doc.splitTextToSize(photo.caption, imgSize);
+           doc.setFontSize(9);
+           // Strip emojis from caption
+           captionLines = doc.splitTextToSize(cleanText(photo.caption), imgSize);
        }
-       const itemTotalHeight = imgSize + (captionLines.length * 4) + 5;
+       const itemTotalHeight = imgSize + (captionLines.length * 4) + 10;
 
-       // Check page break based on total item height
        if (imgY + itemTotalHeight > maxPageY) {
          doc.addPage();
          imgY = 20;
        }
 
-       // Draw Image container (border)
-       setDraw(colors.light);
+       // Image Border
+       setDraw(colors.border);
        doc.setLineWidth(0.5);
        doc.rect(x - 1, imgY - 1, imgSize + 2, imgSize + 2);
        
        try {
-         doc.addImage(photo.uri, 'JPEG', x, imgY, imgSize, imgSize, undefined, 'FAST');
+         doc.addImage(photo.uri, undefined, x, imgY, imgSize, imgSize, undefined, 'FAST');
        } catch (e) {
-         console.error("Image error", e);
-         // Fallback box
-         setFill(colors.light);
+         setFill(colors.lightGray);
          doc.rect(x, imgY, imgSize, imgSize, 'F');
-         setText(colors.label);
-         doc.text("Erro na Imagem", x + 20, imgY + 40);
        }
 
-       // Draw Caption
        if (photo.caption && captionLines.length > 0) {
            setText(colors.text);
            doc.setFont("helvetica", "normal");
-           doc.setFontSize(8);
-           doc.text(captionLines, x, imgY + imgSize + 5);
+           doc.setFontSize(9);
+           doc.text(captionLines, x, imgY + imgSize + 6);
        }
 
-       // Move Y down only after completing a row
        if (isRightColumn) {
-         // Determine the height of the row based on the tallest item in this row? 
-         // For simplicity, we assume max 2 lines of caption roughly or use fixed spacing
-         // A safe increment is image size + some buffer for text
-         imgY += imgSize + gap + 10; 
+         imgY += imgSize + gap + 15; 
        }
     });
   }
@@ -298,41 +282,18 @@ export const generatePDF = async (template: ReportTemplate, data: ReportData) =>
     doc.setPage(i);
     setText(colors.label);
     doc.setFontSize(8);
+    // Right aligned page number
     doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin, 290, { align: 'right' });
-    doc.text("Relatório Gerado via Apprelatoriofacil criado por rafael", margin, 290);
+    // Left aligned credit
+    doc.text("Relatório Gerado via Apprelatoriofacil criado por Rafael", margin, 290);
   }
 
-  // Sanitize description for filename
-  const sanitizedDesc = template.omDescription
+  const sanitizedDesc = cleanText(template.omDescription)
     .replace(/[^a-z0-9]/gi, '_') 
     .replace(/_+/g, '_') 
     .substring(0, 50); 
   
-  const safeName = `Relatorio_OM_${data.omNumber || 'NaoIdentificada'}_${sanitizedDesc}.pdf`;
+  const safeName = `Relatorio_OM_${cleanText(data.omNumber) || 'NA'}_${sanitizedDesc}.pdf`;
   
-  // Generate PDF Blob
-  const pdfBlob = doc.output('blob');
-  const file = new File([pdfBlob], safeName, { type: "application/pdf" });
-
-  // Prioritize Native Mobile Sharing
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: `Relatório OM ${data.omNumber}`,
-        text: `Relatório de Execução - OM ${data.omNumber} - ${template.omDescription}`
-      });
-      // Share successful
-    } catch (e) {
-      // AbortError is typical for user cancellation, otherwise log
-      if ((e as Error).name !== 'AbortError') {
-         console.error("Share failed", e);
-         // Fallback to direct download
-         doc.save(safeName);
-      }
-    }
-  } else {
-    // Fallback for Desktop/Unsupported Browsers
-    doc.save(safeName);
-  }
+  doc.save(safeName);
 };
